@@ -1,0 +1,408 @@
+#!/usr/bin/env python
+
+# create a typescript from the files in a directory
+
+import os, datetime, re, sys
+from optparse import OptionParser, OptionGroup
+
+non_default_mappings = {}
+
+class FontCollection:
+    # adobe fonts naming scheme
+    styles = {
+        'serif' : 'rm',
+        'sans' : 'ss',
+        'mono' : 'tt'}
+    groups = {
+        'SemiCn' : 'SemiCondensed',
+        'SemiExt' : 'SemiExtended',
+        'Cn' : 'Condensed',
+        'Cond' : 'Condensed',
+        'Ext' : 'Extended'}
+    alternatives = {
+        'Book' : 'Regular',
+        'It' : 'Italic',
+        'Italic' : 'Italic',
+        'Light' : 'Light',
+        'Lt' : 'Light',
+        'Semibold' : 'Semibold',
+        'Medium' : 'Medium',
+        'Bold' : 'Bold',
+        'Black' : 'Black'}
+    mappings = {
+        'Regular' : 'tf',
+        'Italic' : 'it',
+        'Bold' : 'bf',
+        'BoldItalic' : 'bi'}
+    opticals = {
+        'Regular' : 'Regular',
+        'Disp' : 'Display',
+        'Capt' : 'Caption',
+        'Subh' : 'Subhead'}
+    optical_ranges = {
+        'Caption' : range(6,9),
+        'Regular' : range(9,14),
+        'Subhead' : range(14,26),
+        'Display' : range(26,48,2)}
+    sizes = ['xx', 'x', '', 'a', 'b', 'c', 'd']
+
+    def __init__(self, _style):
+        """Create a font collection which stores and handles fonts."""
+        self.style = _style
+        self.groups = set()
+        self.fonttree = {}
+        self.typescriptname = ''
+
+    def add_font(self, font):
+        """Add a member of the Font class to the collection."""
+        tree = self.fonttree
+        # add the group of the font to groups
+        self.groups.add(font.group)
+        # insert the font in the group tree
+        if (not font.group in tree):
+            tree[font.group] = {}
+        if (not font.optical in tree[font.group]):
+            tree[font.group][font.optical] = []
+        tree[font.group][font.optical].append(font)
+        # set the typescript name
+        if (self.typescriptname == ''):
+            self.typescriptname = font.basename.lower()
+
+    def write_file(self):
+        """Write the typescript file for the collection."""
+        self.typescriptfile = open('typescripts/type-' + \
+                                       self.typescriptname + '.tex', 'w')
+        f = self.typescriptfile
+        self.write_header()
+        self.write_synonyms()
+        self.write_generic_synonyms()
+        self.write_all_sizings()
+        self.typescriptfile.close()
+
+    def write_header(self):
+        """Write the header of the typescript file."""
+        # set f as synonym for file
+        f = self.typescriptfile
+        f.writelines(['%% ' + f.name + '\n',
+                      '%%\n',
+                      '%% generated automatically by ' + sys.argv[0],
+                      ' on ' + datetime.datetime.now().ctime() + '\n',
+                      '%% written by Michael Murphy ',
+                      '<murphy.md@gmail.com>\n%%\n',
+                      '%% '  + sys.argv[0],
+                      ' is released under the GPL. See LICENSE.txt for ',
+                      'details.\n\n'])
+
+    def write_synonyms(self):
+        """Write the list of named synonyms for each font."""
+        # set f as synonym for file
+        f = self.typescriptfile
+        f.write(self.start_typescript(self.typescriptname))
+        for group in self.fonttree.iterkeys():
+            f.write('% Group: ' + group + '\n')
+            for optical in self.fonttree[group].iterkeys():
+                for font in self.fonttree[group][optical]:
+                    f.write(self.synonym(font.filename, 'name:'+font.filename))
+        f.write(self.stop_typescript())
+
+    def write_generic_synonyms(self):
+        """Write the list of generic named synonyms for each font."""
+        # set f as synonym for file
+        f = self.typescriptfile
+        f.write(self.start_typescript(self.typescriptname, 'name'))
+        for group in self.fonttree.iterkeys():
+            f.write('% Group: ' + group + '\n')
+            for optical in self.fonttree[group].iterkeys():
+                for font in self.fonttree[group][optical]:
+                    f.write(self.synonym(self.style.title() + font.generic_name, \
+                                             font.filename))
+        f.write(self.stop_typescript())
+
+    def write_all_sizings(self):
+        """Write all the sizing information for each optical size."""
+        # set f as synonym for file
+        f = self.typescriptfile
+        for group in self.fonttree.iterkeys():
+            f.write(self.start_typescript(group.lower(), 'size'))
+            # print missing opticals as regular
+            for optical in FontCollection.opticals.itervalues():
+                if (optical in self.fonttree[group]):
+                    self.write_sizing(group, optical, optical)
+                else:
+                    self.write_sizing(group, optical, 'Regular')
+            f.write(self.stop_typescript())
+
+    def write_sizing(self, group, iopt, fopt):
+        """Write the sizing information for a given optical size."""
+        # set f as synonym for file
+        f = self.typescriptfile
+        # for each optical size, set a list of sizes
+        sizelist = [str(s) + 'pt' for s in FontCollection.optical_ranges[iopt]]
+        sizes = '[' + ', '.join(sizelist) + ']'
+        f.write(self.start_body_font(sizes))
+        self.write_font_mappings(self.fonttree[group][fopt])        
+
+    def write_font_mappings(self, fonts):
+        """Generate the set of mappings for a list of fonts."""
+        # set f as synonym for file
+        f = self.typescriptfile
+        lines = []
+        for font in fonts:
+            # see if the mapping is not a standard mapping
+            if (font.mapping not in FontCollection.mappings.values()):
+                non_default_mappings[''.join(font.alternatives).lower()] \
+                    = font.mapping
+                for size in ['']:#FontCollection.sizes:
+                    if (size == '') :
+                        sa = '1'
+                    else:
+                        sa = size
+                    lines.append(tab + tab + font.mapping + size + '=' + \
+                                     self.style.title() + font.generic_name + \
+                                     ' sa ' + sa)
+            else:
+                lines.append(tab + tab + font.mapping + '=' + \
+                                 self.style.title() + font.generic_name + \
+                                 ' sa 1')
+        f.write(',\n'.join(lines) + ']\n')
+
+    def write_test_suite(self):
+        """Write a test suite file that can be \\input to test the font."""
+        # for every style of font, write a line of text
+        self.testfile = open('test-' + self.typescriptname + '.tex', 'w')
+        f = self.testfile
+        f.write('\start\indenting[no]\n')
+        f.write('{\\tt font: ' + self.typescriptname + '}\par\n')
+        for group in self.fonttree.iterkeys():
+            fontname = self.typescriptname + group.lower()
+            f.write('\definetypeface[' + fontname + \
+                        '][' + FontCollection.styles[self.style] + \
+                        '][' + self.style + '][' + self.typescriptname + \
+                        '][' + group.lower() + ']\n')
+            f.write('\switchtotypeface[' + fontname + ']\n')
+            for font in self.fonttree[group]['Regular']:
+                for size in FontCollection.sizes:
+                    f.write('{\\' + font.mapping + size + ' This is ' + \
+                            font.filename + ' 1234}\par\n')
+        f.write('\\page\stop')
+        f.close()
+        
+    def start_typescript(self, middle, last = None):
+        """String to begin a typescript."""
+        str = '\starttypescript [' + self.style + '] [' \
+              + middle + ']'
+        if (last != None):
+            str += ' [' + last + ']'
+        str += '\n'
+        return str
+
+    def stop_typescript(self):
+        """String to stop a typescript."""
+        return "\stoptypescript\n\n"
+
+    def start_body_font(self, sizes):
+        """String to begin defining a bodyfont."""
+        str = tab + '\definebodyfont ' + sizes + ' [' + \
+            FontCollection.styles[self.style] + '] [%\n'
+        return str            
+
+    def synonym(self, internal, external, features = 'adobe'):
+        """String to define a synonym."""
+        str = tab + '\definefontsynonym [' + internal + '] [' + external + \
+            '] [features=' + features + ']\n'
+        return str
+        
+    def print_tree(self):
+        """Print all fonts in the collection as an ordered tree."""
+        for group in self.fonttree.iterkeys():
+            print '+ Group: ' + group
+            for optical in self.fonttree[group].iterkeys():
+                print '--+ Optical: ' + optical
+                print '\n'.join(['  |- ' + f.filename \
+                                     for f in self.fonttree[group][optical]])
+            print '\n'
+        
+
+class Font:
+    ext = ".otf"
+
+    def __init__(self, filename):
+        """Create a font, and determine its properties from the filename.
+
+        This works by examining the string containing the filename for
+        tokens. For example, if the font is called 'MyFont-BoldIt', we
+        split 'BoldIt' into 'Bold' and 'Italic', and assign these as
+        weights.
+        """
+        self.alternatives = []
+        self.group = ''
+        self.optical = ''
+        self.mapping = ''
+        # make sure that the filename really corresponds to a font
+        if (filename.endswith(Font.ext)):
+            self.filename = filename[:-len(Font.ext)]
+        else:
+            print filename + " does not seem to be a font"
+        # get group information about the font from the end of the filename
+        (self.basename, __, self.stystr) = filename.partition('-')
+        self.parse_groups()
+        # construct generic filename
+        self.generic_name = ''
+        if (len(self.alternatives) != 0):
+            self.generic_name += ''.join(self.alternatives)
+        # if there are no alternatives, call the alternative 'Regular'
+        if (self.group != 'Regular' or len(self.alternatives) == 0):
+            self.generic_name += self.group
+        if (self.optical != 'Regular'):
+            self.generic_name += self.optical
+        self.define_mapping()
+
+    def parse_groups(self):
+        """Split the token string of the filename into the features
+        of the font.
+        """
+        # split string into features
+        tokens = re.findall( "[A-Z][a-z]*", self.stystr)
+        # if 'Semi' is a token, combine it with the next token
+        if ('Semi' in tokens):
+            i = tokens.index('Semi')
+            del tokens[i]
+            tokens[i] = 'Semi' + tokens[i]
+        # search for the features
+        for token in tokens:
+            if (token in FontCollection.alternatives):
+                self.alternatives.append(FontCollection.alternatives[token])
+            elif (token in FontCollection.groups):
+                self.group = FontCollection.groups[token]
+            elif (token in FontCollection.opticals):
+                self.optical = FontCollection.opticals[token]
+        if (self.group == ''):
+            self.group = 'Regular'
+        if (self.optical == ''):
+            self.optical = 'Regular'
+        # put 'Italic' last
+        if ('Italic' in self.alternatives and self.alternatives[-1] != 'Italic'):
+            self.alternatives.remove('Italic')
+            self.alternatives.append('Italic')
+
+
+    def define_mapping(self):
+        """Decide what the mapping of this font is (e.g. \bf). Non-standard
+        mappings are defined by concatenating the token string of the
+        filename."""
+        # if no weight is present, the mapping is 'Regular'
+        if (len(self.alternatives) == 0):
+            self.mapping = FontCollection.mappings['Regular']
+        # if there is only one group, then the should be simple
+        elif (len(self.alternatives) == 1):
+            try:
+                self.mapping = FontCollection.mappings[self.alternatives[0]]
+            except KeyError:
+                pass            
+        # of there are more than one weight, attempt to combine them
+        else:
+            # sort the groups alphabetically
+            self.alternatives.sort()
+            # if Italic is in the list, put it at the end
+            if ('Italic' in self.alternatives):
+                self.alternatives.remove('Italic')
+                self.alternatives.append('Italic')
+            # concatenate the list, and look for it in the mappings
+            try:
+                self.mapping = FontCollection.mappings[''.join(self.alternatives)]
+            except KeyError:
+                pass
+        if (self.mapping == ''):
+            # if no mapping, then force a custom mapping
+            self.mapping = re.sub(r'([A-Z][a-z])[^A-Z]*',
+                                  r'\1',''.join(self.alternatives)).lower()
+            
+    def print_info(self):
+        """Print all information about the font."""
+        print '** Font: ' + self.filename
+        print '-gen name ' + self.generic_name
+        print '-optical: ' + self.optical
+        print '-group:   ' + self.group
+        print '-alternatives: ' + ','.join(self.alternatives)
+        print '-mapping: ' + self.mapping
+
+def print_new_mappings():
+    ndmap = non_default_mappings
+    # for every mapping not in the list of recognised mappings,
+    # we have to use \definestyle
+    print '****\nMake sure that the following are defined somewhere'
+    for mapping in ndmap:
+        str = '\definefontalternative[' + ndmap[mapping] + ']'
+        print str
+
+def write_known_font(style, name):
+    # see if file exists
+    if not os.path.isfile(known_font_file):
+        flag = 'w'
+    else:
+        flag = 'a'
+    fontfile = open(known_font_file, flag)
+    # write to file
+    fontfile.write(style + ' ' + name.replace(' ','_') + '\n')
+    fontfile.close()
+
+tab = "  "
+
+# read the list of know fonts
+known_fonts = {}
+known_font_file = 'fontfile.txt'
+try:
+    fontfile = open(known_font_file, 'r')
+    for line in fontfile:
+        try:
+            style, fontname = line.split()
+            fontname = fontname.replace('_',' ')
+        except ValueError:
+            error('The file ' + known_font_file + ' is not formatted ' + \
+                      'properly.\nTry deleting it.')
+        if (not style in FontCollection.styles):
+            print 'I don\'t recognise the font type ' + style
+        else:
+            known_fonts[fontname] = style
+    fontfile.close()
+except IOError:
+    # there aren't any known fonts, so pass
+    pass
+# get list of files in dir that have font extension
+allfiles = []
+dir = sys.argv[1]
+if not os.path.isdir(dir):
+    exit(dir + ' is not a directory')
+for roots, dirs, files in os.walk(dir):
+    allfiles.extend(files)
+collections = {}
+for file in allfiles:
+    font = Font(file)
+    if (not font.basename in collections):
+        if (not font.basename in known_fonts):
+            style = raw_input('What type of font is ' + font.basename + ' ?\n' + \
+                                'seri(f), (s)ans, or (m)ono: ')
+            if (not style in FontCollection.styles):
+                if (style == 'f'):
+                    style = 'serif'
+                elif (style == 's'):
+                    style = 'sans'
+                elif (style == 'm'):
+                    style = 'mono'
+                else:
+                    exit('I don\'t recognise the font type ' + style)
+            # write this font and its type to the known fonts file
+            write_known_font(style, font.basename)
+        else:
+            style = known_fonts[font.basename]
+        collections[font.basename] = FontCollection(style)
+    collections[font.basename].add_font(font)
+
+for collection in collections.itervalues():
+    collection.write_file()
+    collection.write_test_suite()
+
+print_new_mappings()
+
+print '***\nProcessed ' + str(len(allfiles)) + ' files and defined ' + \
+    str(len(collections.values())) + ' typefaces'
