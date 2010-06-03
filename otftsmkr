@@ -16,6 +16,7 @@ class FontCollection:
         'sans' : 'ss',
         'mono' : 'tt'}
     groups = {
+        'Scn' : 'SemiCondensed',
         'SemiCn' : 'SemiCondensed',
         'SemiExt' : 'SemiExtended',
         'Cn' : 'Condensed',
