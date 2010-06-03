@@ -131,7 +131,7 @@ class FontCollection:
             for optical in FontCollection.opticals.itervalues():
                 if (optical in self.fonttree[group]):
                     self.write_sizing(group, optical, optical)
-                else:
+                elif ('Regular' in self.fonttree[group]):
                     self.write_sizing(group, optical, 'Regular')
             f.write(self.stop_typescript())
 
@@ -183,10 +183,11 @@ class FontCollection:
                         '][' + self.style + '][' + self.typescriptname + \
                         '][' + group.lower() + ']\n')
             f.write('\switchtotypeface[' + fontname + ']\n')
-            for font in self.fonttree[group]['Regular']:
-                for size in FontCollection.sizes:
-                    f.write('{\\' + font.mapping + size + ' This is ' + \
-                            font.filename + ' 1234}\par\n')
+            if ('Regular' in self.fonttree[group]):
+                for font in self.fonttree[group]['Regular']:
+                    for size in FontCollection.sizes:
+                        f.write('{\\' + font.mapping + size + ' This is ' + \
+                                    font.filename + ' 1234}\par\n')
         f.write('\\page\stop')
         f.close()
         
