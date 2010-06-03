@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
-# create a typescript from the files in a directory
+# otftsmkr Copyright (C) 2010 by Michael Murphy <murphy.md@gmail.com>
+#
+# Licensed under the GPL. See LICENSE.txt for details.
 
 import os, datetime, re, sys
 from optparse import OptionParser, OptionGroup
