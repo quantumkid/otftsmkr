@@ -280,6 +280,30 @@ class Font:
                 self.group = FontCollection.groups[token]
             elif (token in FontCollection.opticals):
                 self.optical = FontCollection.opticals[token]
+            # if there are tokens that don't belong anywhere, alert the
+            # user, and see if we can't classify it as something else
+            else:
+                print "I don't recognise the feature " + token + \
+                    " in " + self.filename + ". Is it an \n(a)lternative" + \
+                    " (e.g. Bold, Italic, etc.), \n(g)roup" + \
+                    " (e.g. Condensed, Extended), \nor should I (i)gnore it?\n"
+                dec = raw_input('(a)lternative, (g)roup, (i)gnore? : ')
+                if (dec == 'a'):
+                    name = raw_input('Give a name to the alternative : ')
+                    if (name != ''):
+                        FontCollection.alternatives[token] = name
+                        print "Adding alternative '" + name + "'"
+                    else:
+                        sys.exit("I can't use an empty name; aborting")
+                elif (dev == 'g'):
+                    name = raw_input('Give a name to the group : ')
+                    if (name != ''):
+                        FontCollection.groupg[token] = name
+                        print "Adding group '" + name + "'"
+                    else:
+                        sys.exit("I can't use an empty name; aborting")
+                else:
+                    print "Ignoring feature " + token
         if (self.group == ''):
             self.group = 'Regular'
         if (self.optical == ''):
