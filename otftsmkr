@@ -5,7 +5,6 @@
 # Licensed under the GPL. See LICENSE.txt for details.
 
 import os, datetime, re, sys
-from optparse import OptionParser, OptionGroup
 
 non_default_mappings = {}
 
@@ -295,10 +294,10 @@ class Font:
                         print "Adding alternative '" + name + "'"
                     else:
                         sys.exit("I can't use an empty name; aborting")
-                elif (dev == 'g'):
+                elif (dec == 'g'):
                     name = raw_input('Give a name to the group : ')
                     if (name != ''):
-                        FontCollection.groupg[token] = name
+                        FontCollection.groups[token] = name
                         print "Adding group '" + name + "'"
                     else:
                         sys.exit("I can't use an empty name; aborting")
@@ -386,8 +385,8 @@ try:
             style, fontname = line.split()
             fontname = fontname.replace('_',' ')
         except ValueError:
-            error('The file ' + known_font_file + ' is not formatted ' + \
-                      'properly.\nTry deleting it.')
+            print >> sys.stderr, 'The file ' + known_font_file \
+            + ' is not formatted properly.\nTry deleting it.'
         if (not style in FontCollection.styles):
             print 'I don\'t recognise the font type ' + style
         else:
